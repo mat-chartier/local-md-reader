@@ -25,7 +25,11 @@ A lightweight, offline markdown explorer. Browse local markdown files with a spl
 ## Quick Start
 
 ### 1. Download
-Download `index.html` from the [releases](../../releases) page.
+Download `index.html` from the [main branch](https://raw.githubusercontent.com/mat-chartier/local-md-reader/main/index.html).
+
+Or: Open index.html directly from the [repository](https://github.com/mat-chartier/local-md-reader/blob/main/index.html).
+
+Or: Access on [github pages](https://mat-chartier.github.io/local-md-reader/)
 
 ### 2. Open
 Open the file directly in your browser (Firefox, Chrome, Safari, Edge).
@@ -115,14 +119,6 @@ python3 -m http.server 8000
 ```bash
 npx http-server .
 # Visit http://localhost:8080
-```
-
----
-
-## GitHub Pages Deployment
-
-```
-https://mat-chartier.github.io/local-md-reader/
 ```
 
 ---
