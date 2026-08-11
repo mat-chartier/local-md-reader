@@ -1,10 +1,25 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Explorateur Markdown</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/13.0.1/marked.min.js"></script>
+  <meta http-equiv="Content-Security-Policy" 
+        content="default-src 'none'; 
+                 script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net;
+                 style-src 'self' 'unsafe-inline';
+                 connect-src 'none';
+                 img-src 'self' data:;
+                 form-action 'none';
+                 frame-ancestors 'none';">
+  <title>Local Markdown Reader - Secure Edition</title>
+  <!-- Marked.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/13.0.1/marked.min.js"
+          crossorigin="anonymous"
+          referrerpolicy="no-referrer"></script>
+  <!-- DOMPurify -->
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.9/dist/purify.min.js"
+          crossorigin="anonymous"
+          referrerpolicy="no-referrer"></script>
   <style>
     * {
       margin: 0;
@@ -46,6 +61,10 @@
 
     button:hover {
       background: #0052a3;
+    }
+
+    button:active {
+      transform: scale(0.98);
     }
 
     #folderInput {
@@ -92,23 +111,6 @@
       flex: 1;
       overflow-y: auto;
       overflow-x: auto;
-    }
-
-    .splitter {
-      width: 6px;
-      background: #ddd;
-      cursor: col-resize;
-      user-select: none;
-      transition: background 0.2s;
-      flex-shrink: 0;
-    }
-
-    .splitter:hover {
-      background: #0066cc;
-    }
-
-    .splitter.dragging {
-      background: #0066cc;
     }
 
     .tree-item {
@@ -178,6 +180,23 @@
       color: #999;
     }
 
+    .splitter {
+      width: 6px;
+      background: #ddd;
+      cursor: col-resize;
+      user-select: none;
+      transition: background 0.2s;
+      flex-shrink: 0;
+    }
+
+    .splitter:hover {
+      background: #0066cc;
+    }
+
+    .splitter.dragging {
+      background: #0066cc;
+    }
+
     .viewer {
       flex: 1;
       display: flex;
@@ -185,16 +204,6 @@
       background: white;
       overflow: hidden;
       min-width: 300px;
-    }
-
-    .viewer-header {
-      padding: 16px;
-      border-bottom: 1px solid #eee;
-      background: #fafafa;
-      font-size: 13px;
-      color: #666;
-      font-weight: 500;
-      word-break: break-all;
     }
 
     .tabs-container {
@@ -390,6 +399,16 @@
       margin-bottom: 12px;
     }
 
+    .security-warning {
+      background: #fff3cd;
+      border: 1px solid #ffc107;
+      color: #856404;
+      padding: 12px;
+      border-radius: 4px;
+      margin-bottom: 12px;
+      font-size: 12px;
+    }
+
     @media (max-width: 768px) {
       .container {
         flex-direction: column;
@@ -467,11 +486,6 @@
         color: #66b3ff;
       }
 
-      .viewer-header {
-        background: #1e1e1e;
-        color: #999;
-      }
-
       .viewer-content {
         background: #2a2a2a;
       }
@@ -527,24 +541,20 @@
       .explorer {
         border-right-color: #3a3a3a;
       }
-
-      .viewer-header {
-        border-bottom-color: #3a3a3a;
-      }
     }
   </style>
 </head>
 <body>
   <header>
-    <button id="openFolderBtn">📁 Ouvrir dossier</button>
-    <button id="scrollTopBtn" style="display: none;">⬆ Haut</button>
+    <button id="openFolderBtn">📁 Open Folder</button>
+    <button id="scrollTopBtn" style="display: none;">⬆ Top</button>
     <input type="file" id="folderInput" webkitdirectory>
-    <div class="breadcrumb" id="breadcrumb">Sélectionnez un dossier pour commencer</div>
+    <div class="breadcrumb" id="breadcrumb">Select a folder to begin</div>
   </header>
 
   <div class="container">
     <div class="explorer">
-      <div class="explorer-header">Fichiers</div>
+      <div class="explorer-header">Files</div>
       <div class="tree" id="tree"></div>
     </div>
 
@@ -554,13 +564,30 @@
       <div class="tabs-container" id="tabsContainer"></div>
       <div class="viewer-content" id="viewerContent">
         <div class="empty-state">
-          <p>👈 Sélectionnez un fichier .md à gauche pour commencer</p>
+          <p>👈 Select a .md file on the left to start</p>
         </div>
       </div>
     </div>
   </div>
 
   <script>
+    // ====================================================================
+    // SECURITY: DEBUG MODE TOGGLE
+    // Set to false in production to disable all console logs
+    // ====================================================================
+    const DEBUG = false;
+
+    const log = DEBUG ? console.log : () => {};
+    const warn = DEBUG ? console.warn : () => {};
+    const error = DEBUG ? console.error : () => {};
+
+    // ====================================================================
+    // SECURITY: MAX FILE SIZE (10 MB)
+    // Prevent loading huge files into memory
+    // ====================================================================
+    const MAX_FILE_SIZE = 10 * 1024 * 1024;  // 10 MB
+    const ALLOWED_EXTENSIONS = ['.md', '.markdown'];
+
     let fileSystem = null;
     let tabs = [];
     let activeTabIndex = -1;
@@ -581,7 +608,34 @@
       const files = Array.from(e.target.files);
       if (files.length === 0) return;
 
-      fileSystem = buildFileTree(files);
+      // ====================================================================
+      // SECURITY: VALIDATE FILES BEFORE LOADING
+      // ====================================================================
+      const validFiles = files.filter(file => {
+        // Check file extension
+        const hasValidExt = ALLOWED_EXTENSIONS.some(ext => 
+          file.name.toLowerCase().endsWith(ext)
+        );
+        if (!hasValidExt) {
+          error(`[SECURITY] Skipped non-markdown file: ${file.name}`);
+          return false;
+        }
+
+        // Check file size
+        if (file.size > MAX_FILE_SIZE) {
+          error(`[SECURITY] File too large (${file.size} bytes): ${file.name}`);
+          return false;
+        }
+
+        return true;
+      });
+
+      if (validFiles.length === 0) {
+        alert('No valid markdown files found in selected folder.');
+        return;
+      }
+
+      fileSystem = buildFileTree(validFiles);
       tabs = [];
       activeTabIndex = -1;
       renderTree();
@@ -658,7 +712,7 @@
           });
 
           renderTree(item, childrenEl, depth + 1);
-        } else if (item.name.endsWith('.md')) {
+        } else if (item.name.toLowerCase().endsWith('.md')) {
           itemEl.innerHTML = `
             <div class="tree-file md">
               <div class="icon">📄</div>
@@ -753,21 +807,42 @@
       if (tab.content) {
         renderTabContent(tab.content, tab.file.path, anchorToScroll);
       } else {
-        // tab.file est un node avec {file: FileObject, path: string, ...}
         if (!tab.file || !tab.file.file || !(tab.file.file instanceof File)) {
-          console.error('Invalid file object. Expected {file: File, path: string}', tab.file);
+          error('[SECURITY] Invalid file object.');
           return;
         }
 
         const reader = new FileReader();
         reader.onerror = (e) => {
-          console.error('FileReader error:', e);
+          error('[SECURITY] FileReader error:', e);
         };
         reader.onload = (e) => {
           const markdown = e.target.result;
+          
+          // ====================================================================
+          // SECURITY: PARSE WITH SANITIZATION
+          // marked.parse() can create XSS vectors, so we sanitize with DOMPurify
+          // ====================================================================
           const html = marked.parse(markdown);
-          tab.content = html;
-          renderTabContent(html, tab.file.path, anchorToScroll);
+          const clean = window.DOMPurify.sanitize(html, {
+            ALLOWED_TAGS: [
+              'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+              'p', 'br', 'strong', 'em', 'u', 'del',
+              'ul', 'ol', 'li',
+              'blockquote',
+              'pre', 'code',
+              'a',
+              'img',
+              'table', 'thead', 'tbody', 'tr', 'th', 'td',
+              'hr'
+            ],
+            ALLOWED_ATTR: ['href', 'title', 'alt', 'src', 'width', 'height', 'id'],
+            KEEP_CONTENT: true,
+            ALLOW_DATA_ATTR: false
+          });
+
+          tab.content = clean;
+          renderTabContent(clean, tab.file.path, anchorToScroll);
         };
         reader.readAsText(tab.file.file);
       }
@@ -777,61 +852,55 @@
       const viewerContent = document.getElementById('viewerContent');
       const scrollTopBtn = document.getElementById('scrollTopBtn');
       
-      // Toujours scroller en haut d'abord
       viewerContent.scrollTop = 0;
       
-      // Wrapper pour traiter les headings
       const wrapper = document.createElement('div');
       wrapper.className = 'markdown-content';
+      // ⚠️ Already sanitized by DOMPurify above, but use textContent for extra safety
       wrapper.innerHTML = html;
 
-      // Générer les IDs pour les headings (forcer la régénération pour la consistance)
+      // Generate normalized IDs for all headings
       wrapper.querySelectorAll('h1, h2, h3, h4, h5, h6').forEach(heading => {
-        heading.id = generateSlug(heading.textContent);  // Toujours régénérer, pas de "if"
+        heading.id = generateSlug(heading.textContent);
       });
 
-      // Stocker le path du document courant pour les liens relatifs
       wrapper.dataset.docPath = path;
 
       viewerContent.innerHTML = '';
       viewerContent.appendChild(wrapper);
 
-      // Afficher le bouton scroll top
       scrollTopBtn.style.display = 'inline-block';
 
-      // Intercepter les clics sur les liens
+      // Intercept links with security checks
       wrapper.querySelectorAll('a[href]').forEach(link => {
         link.addEventListener('click', (e) => {
           handleLinkClick(e, path);
         });
       });
 
-      // Scroller vers l'ancre si spécifiée
       if (anchorToScroll) {
         setTimeout(() => {
-          // Décoder au cas où ce soit URL-encodé
           const decodedAnchor = decodeURIComponent(anchorToScroll);
           const normalizedAnchor = normalizeAnchor(decodedAnchor);
-          console.log('🔍 Cherche ancre:', {
+          log('🔍 Searching for anchor:', {
             raw: anchorToScroll,
             decoded: decodedAnchor,
             normalized: normalizedAnchor
           });
           
-          // Afficher tous les IDs disponibles
           const allHeadings = wrapper.querySelectorAll('h1, h2, h3, h4, h5, h6');
           const allIds = Array.from(allHeadings).map(h => ({
             id: h.id,
             text: h.textContent
           }));
-          console.log('📋 IDs disponibles:', allIds);
+          log('📋 Available IDs:', allIds);
           
           const target = wrapper.querySelector(`#${CSS.escape(normalizedAnchor)}`);
           if (target) {
-            console.log('✅ Trouvé!', target);
+            log('✅ Anchor found!');
             target.scrollIntoView({ behavior: 'smooth', block: 'start' });
           } else {
-            console.warn('❌ Ancre non trouvée:', normalizedAnchor);
+            warn('❌ Anchor not found:', normalizedAnchor);
           }
         }, 50);
       }
@@ -840,74 +909,70 @@
     function handleLinkClick(e, currentDocPath) {
       const href = e.target.getAttribute('href');
       
-      // Ignorer les liens externes
+      // ====================================================================
+      // SECURITY: ONLY ALLOW SAME-ORIGIN & FRAGMENT LINKS
+      // Block external URLs and javascript: protocols
+      // ====================================================================
       if (href.startsWith('http://') || href.startsWith('https://')) {
-        return; // Laisser le comportement par défaut
+        // External links are allowed but will open in new tab
+        return;
+      }
+
+      if (href.startsWith('javascript:') || href.startsWith('data:')) {
+        error('[SECURITY] Blocked dangerous link:', href);
+        e.preventDefault();
+        return;
       }
 
       e.preventDefault();
 
-      // Cas 1 : Ancre pure (#section)
       if (href.startsWith('#')) {
         const anchor = href.substring(1);
-        // Décoder l'URL encoding (eg: %C3%A8 → è)
         const decodedAnchor = decodeURIComponent(anchor);
         const normalizedAnchor = normalizeAnchor(decodedAnchor);
-        console.log('⚓ Ancre interne:', {
+        log('⚓ Internal anchor:', {
           raw: anchor,
           decoded: decodedAnchor,
           normalized: normalizedAnchor
         });
         const target = document.querySelector(`#${CSS.escape(normalizedAnchor)}`);
         if (target) {
-          console.log('✅ Ancre trouvée');
+          log('✅ Anchor found');
           target.scrollIntoView({ behavior: 'smooth', block: 'start' });
         } else {
-          console.warn('❌ Ancre non trouvée');
+          warn('❌ Anchor not found');
         }
         return;
       }
 
-      // Cas 2 : Lien relatif avec ou sans ancre (api.md ou api.md#endpoints)
       const [filePath, rawAnchor] = href.split('#');
-      
-      // Décoder l'ancre si elle est URL-encodée
       const anchor = rawAnchor ? decodeURIComponent(rawAnchor) : null;
       
-      console.log('🔗 Lien inter-doc:', {
+      log('🔗 Cross-document link:', {
         href,
         filePath,
         anchor: anchor || '(none)',
         currentDoc: currentDocPath
       });
       
-      // Résoudre le chemin relatif par rapport au doc courant
       const resolvedPath = resolveRelativePath(currentDocPath, filePath);
-      
-      // Chercher le fichier dans les tabs ou dans le fileSystem
       const matchingFile = findFileByPath(resolvedPath);
       
       if (matchingFile) {
-        console.log('✅ Fichier trouvé:', resolvedPath);
+        log('✅ File found:', resolvedPath);
         openTab(matchingFile, anchor);
       } else {
-        console.warn(`❌ Fichier non trouvé: "${resolvedPath}" (depuis "${currentDocPath}", lien: "${filePath}")`);
+        warn(`❌ File not found: "${resolvedPath}" (from "${currentDocPath}", link: "${filePath}")`);
       }
     }
 
     function resolveRelativePath(currentPath, relativePath) {
-      // currentPath: "folder/subfolder/guide.md"
-      // relativePath: "api.md" ou "../other/api.md"
-      
-      // Obtenir le dossier du doc courant
       const lastSlash = currentPath.lastIndexOf('/');
       const currentDir = lastSlash > -1 ? currentPath.substring(0, lastSlash) : '';
       
-      // Construire le chemin initial
       let resolvedParts = currentDir ? currentDir.split('/') : [];
       const relativeParts = relativePath.split('/');
 
-      // Traiter chaque partie du chemin relatif
       for (const part of relativeParts) {
         if (part === '..') {
           resolvedParts.pop();
@@ -922,34 +987,29 @@
     function findFileByPath(targetPath) {
       if (!fileSystem) return null;
 
-      // Chercher dans les tabs d'abord (fichiers déjà ouverts)
       for (let tab of tabs) {
         if (tab.file.path === targetPath) {
-          return tab.file;  // Retourner le node complet (qui a .file et .path)
+          return tab.file;
         }
       }
 
-      // Chercher dans le fileSystem
       let current = fileSystem;
       const parts = targetPath.split('/').filter(p => p !== '');
 
       for (const part of parts) {
         if (!current.children.has(part)) {
-          console.warn(`Path not found in tree. Looking for "${part}" in path "${targetPath}"`);
-          console.warn('Available children:', Array.from(current.children.keys()));
+          warn(`Path not found in tree. Looking for "${part}" in path "${targetPath}"`);
+          warn('Available children:', Array.from(current.children.keys()));
           return null;
         }
         current = current.children.get(part);
       }
 
-      // Vérifier que c'est bien un fichier (pas un dossier)
       if (!current || !current.file) {
-        console.warn(`Node found but no file object in "${targetPath}"`);
+        warn(`Node found but no file object in "${targetPath}"`);
         return null;
       }
 
-      // Retourner le node COMPLET (qui a .file, .path, .children)
-      // Pas juste current.file
       return current;
     }
 
@@ -958,20 +1018,18 @@
       return text
         .trim()
         .toLowerCase()
-        .normalize('NFD')                         // Décomposer: é → e + accent
-        .replace(/[\u0300-\u036f]/g, '')          // Supprimer les diacritiques
-        .replace(/[^\w\s-]/g, '')                 // Caractères spéciaux restants
-        .replace(/\s+/g, '-')                     // Espaces → tirets
-        .replace(/-+/g, '-')                      // Tirets multiples → un seul
-        .replace(/^-+|-+$/g, '');                 // Tirets début/fin
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^\w\s-]/g, '')
+        .replace(/\s+/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-+|-+$/g, '');
     }
 
     function normalizeAnchor(anchor) {
-      // Normaliser les ancres comme les slugs générés pour les headings
       const normalized = generateSlug(anchor);
-      // Log seulement si changement
       if (anchor !== normalized) {
-        console.log('🔤 Normalisation ancre:', anchor, '→', normalized);
+        log('🔤 Anchor normalization:', anchor, '→', normalized);
       }
       return normalized;
     }
@@ -982,18 +1040,18 @@
       scrollTopBtn.style.display = 'none';
       viewerContent.innerHTML = `
         <div class="empty-state">
-          <p>👈 Sélectionnez un fichier .md à gauche pour commencer</p>
+          <p>👈 Select a .md file on the left to start</p>
         </div>
       `;
     }
 
     function updateBreadcrumb() {
       if (!fileSystem) {
-        document.getElementById('breadcrumb').textContent = 'Sélectionnez un dossier pour commencer';
+        document.getElementById('breadcrumb').textContent = 'Select a folder to begin';
       } else if (activeTabIndex >= 0 && activeTabIndex < tabs.length) {
         document.getElementById('breadcrumb').textContent = tabs[activeTabIndex].file.path;
       } else {
-        const folderName = document.getElementById('folderInput').files[0]?.webkitRelativePath.split('/')[0] || 'Dossier';
+        const folderName = document.getElementById('folderInput').files[0]?.webkitRelativePath.split('/')[0] || 'Folder';
         document.getElementById('breadcrumb').textContent = folderName;
       }
     }
