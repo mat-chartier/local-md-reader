@@ -25,9 +25,7 @@ No server, no build step — just open in your browser.
 ## Deployment
 
 Deploy to GitHub Pages:
-- Push to `/docs` folder
-- Enable Pages in repo settings
-- Live at `https://[username].github.io/local-md-reader/`
+- Live at `https://mat-chartier.github.io/local-md-reader/`
 
 ## Technical Stack
 
