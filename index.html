@@ -606,7 +606,10 @@
 
     function handleFolderSelect(e) {
       const files = Array.from(e.target.files);
-      if (files.length === 0) return;
+      if (files.length === 0) {
+        updateBreadcrumb('No folder selected');
+        return;
+      }
 
       // ====================================================================
       // SECURITY: VALIDATE FILES BEFORE LOADING
@@ -617,7 +620,7 @@
           file.name.toLowerCase().endsWith(ext)
         );
         if (!hasValidExt) {
-          error(`[SECURITY] Skipped non-markdown file: ${file.name}`);
+          log(`[INFO] Skipped non-markdown file: ${file.name}`);
           return false;
         }
 
@@ -630,17 +633,39 @@
         return true;
       });
 
+      // Count skipped files
+      const skippedCount = files.length - validFiles.length;
+      let message = '';
+
       if (validFiles.length === 0) {
-        alert('No valid markdown files found in selected folder.');
+        // No markdown files found
+        message = `❌ No markdown files found (${skippedCount} non-markdown files ignored)`;
+        updateBreadcrumb(message);
+        
+        // Clear UI to show feedback
+        fileSystem = null;
+        tabs = [];
+        activeTabIndex = -1;
+        document.getElementById('tree').innerHTML = '<p style="color: var(--text-secondary); padding: 10px;">No .md or .markdown files in this folder</p>';
+        renderTabs();
         return;
       }
 
+      // Show info about loaded files
+      if (skippedCount > 0) {
+        message = `✅ Loaded ${validFiles.length} markdown file(s), ignored ${skippedCount} other file(s)`;
+      } else {
+        message = `✅ Loaded ${validFiles.length} markdown file(s)`;
+      }
+      
+      log(`[INFO] ${message}`);
+      
       fileSystem = buildFileTree(validFiles);
       tabs = [];
       activeTabIndex = -1;
       renderTree();
       renderTabs();
-      updateBreadcrumb();
+      updateBreadcrumb(message);
     }
 
     function buildFileTree(files) {
@@ -1045,14 +1070,19 @@
       `;
     }
 
-    function updateBreadcrumb() {
-      if (!fileSystem) {
-        document.getElementById('breadcrumb').textContent = 'Select a folder to begin';
+    function updateBreadcrumb(customMessage = null) {
+      const breadcrumbEl = document.getElementById('breadcrumb');
+      
+      if (customMessage) {
+        // Use custom message (for status feedback)
+        breadcrumbEl.textContent = customMessage;
+      } else if (!fileSystem) {
+        breadcrumbEl.textContent = 'Select a folder to begin';
       } else if (activeTabIndex >= 0 && activeTabIndex < tabs.length) {
-        document.getElementById('breadcrumb').textContent = tabs[activeTabIndex].file.path;
+        breadcrumbEl.textContent = tabs[activeTabIndex].file.path;
       } else {
         const folderName = document.getElementById('folderInput').files[0]?.webkitRelativePath.split('/')[0] || 'Folder';
-        document.getElementById('breadcrumb').textContent = folderName;
+        breadcrumbEl.textContent = folderName;
       }
     }
 
