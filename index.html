@@ -411,6 +411,20 @@
       font-size: 12px;
     }
 
+    .browser-hint {
+      background: #fff3cd;
+      border-bottom: 1px solid #ffc107;
+      color: #856404;
+      padding: 6px 16px;
+      font-size: 12px;
+    }
+
+    .browser-hint code {
+      background: rgba(0,0,0,0.06);
+      padding: 1px 4px;
+      border-radius: 3px;
+    }
+
     @media (max-width: 768px) {
       .container {
         flex-direction: column;
@@ -543,6 +557,16 @@
       .explorer {
         border-right-color: #3a3a3a;
       }
+
+      .browser-hint {
+        background: #3a3320;
+        border-bottom-color: #6b5b16;
+        color: #ffd970;
+      }
+
+      .browser-hint code {
+        background: rgba(255,255,255,0.1);
+      }
     }
   </style>
 </head>
@@ -554,6 +578,10 @@
     <input type="file" id="folderInput" webkitdirectory>
     <div class="breadcrumb" id="breadcrumb">Select a folder to begin</div>
   </header>
+
+  <div id="browserHint" class="browser-hint" style="display: none;">
+    💡 For the full folder explorer — browse into <em>any</em> sub-folder, no up-front scan — open this page in <strong>Chrome</strong> or <strong>Edge</strong>. Other browsers still work with a one-time flat listing of your <code>.md</code> files.
+  </div>
 
   <div class="container">
     <div class="explorer">
@@ -611,6 +639,10 @@
       ? 'Reload files from the current folder'
       : 'Your browser can\'t re-read the folder silently — this re-opens the picker';
 
+    if (!supportsFsAccess) {
+      document.getElementById('browserHint').style.display = 'block';
+    }
+
     document.getElementById('openFolderBtn').addEventListener('click', openFolder);
     refreshBtn.addEventListener('click', refreshFolder);
 
@@ -662,27 +694,174 @@
         }
       }
 
-      const entries = [];
+      // Lazy explorer: do NOT scan recursively up-front. Only the folder's
+      // immediate entries are listed; sub-folders are read when expanded.
+      // The in-memory `fileSystem` tree is used by the fallback path only.
+      fileSystem = null;
+
+      if (resetTabs) {
+        tabs = [];
+        activeTabIndex = -1;
+      } else {
+        await reconcileTabsLazy();
+      }
+
       try {
-        await walkDirectory(dirHandle, dirHandle.name, entries);
+        await renderLazyChildrenInto(dirHandle, document.getElementById('tree'), 0, dirHandle.name);
       } catch (err) {
         error('[FS] Failed to read directory:', err);
         updateBreadcrumb('❌ Could not read the folder — try re-opening it');
         return;
       }
-      ingestEntries(entries, { resetTabs });
+
+      renderTabs();
+      refreshBtn.style.display = 'inline-block';
+
+      if (resetTabs || tabs.length === 0) {
+        showEmptyState();
+      }
+      if (!resetTabs && activeTabIndex >= 0 && activeTabIndex < tabs.length) {
+        loadAndRenderTab(activeTabIndex);
+      }
+
+      updateBreadcrumb(`${resetTabs ? '📁' : '🔄'} ${dirHandle.name}`);
     }
 
-    async function walkDirectory(directoryHandle, prefix, out) {
+    // List one directory's immediate children into `parentEl`. Folders are
+    // ALWAYS shown (even with no markdown inside); only .md/.markdown files
+    // are listed. Sub-folders are rendered lazily on first expand.
+    async function renderLazyChildrenInto(directoryHandle, parentEl, depth, parentPath) {
+      parentEl.innerHTML = '';
+      const dirs = [];
+      const files = [];
       for await (const entry of directoryHandle.values()) {
-        const path = `${prefix}/${entry.name}`;
         if (entry.kind === 'directory') {
-          await walkDirectory(entry, path, out);
-        } else if (entry.kind === 'file') {
-          const file = await entry.getFile();
-          out.push({ file, relativePath: path });
+          dirs.push(entry);
+        } else if (entry.kind === 'file' &&
+                   ALLOWED_EXTENSIONS.some(ext => entry.name.toLowerCase().endsWith(ext))) {
+          files.push(entry);
         }
       }
+      dirs.sort((a, b) => a.name.localeCompare(b.name));
+      files.sort((a, b) => a.name.localeCompare(b.name));
+
+      dirs.forEach(handle =>
+        parentEl.appendChild(makeFolderEl(handle, depth, `${parentPath}/${handle.name}`)));
+      files.forEach(handle =>
+        parentEl.appendChild(makeFileEl(handle, depth, `${parentPath}/${handle.name}`)));
+    }
+
+    function makeFolderEl(directoryHandle, depth, path) {
+      const wasExpanded = expandedFolders.has(path);
+
+      const itemEl = document.createElement('div');
+      itemEl.className = 'tree-item' + (wasExpanded ? '' : ' collapsed');
+      itemEl.style.paddingLeft = depth * 12 + 'px';
+      itemEl.innerHTML = `
+        <div class="tree-folder">
+          <div class="toggle">${wasExpanded ? '▼' : '▶'}</div>
+          <div class="icon">📁</div>
+          <span>${escapeHtml(directoryHandle.name)}</span>
+        </div>
+        <div class="children"></div>
+      `;
+
+      const toggle = itemEl.querySelector('.toggle');
+      const childrenEl = itemEl.querySelector('.children');
+      let loaded = false;
+
+      const expand = async () => {
+        if (!loaded) {
+          loaded = true;
+          try {
+            await renderLazyChildrenInto(directoryHandle, childrenEl, depth + 1, path);
+          } catch (err) {
+            loaded = false;
+            error('[FS] Failed to list folder:', path, err);
+            return;
+          }
+        }
+        itemEl.classList.remove('collapsed');
+        toggle.textContent = '▼';
+        expandedFolders.add(path);
+      };
+
+      const collapse = () => {
+        itemEl.classList.add('collapsed');
+        toggle.textContent = '▶';
+        expandedFolders.delete(path);
+      };
+
+      const onToggle = (e) => {
+        if (e) e.stopPropagation();
+        if (itemEl.classList.contains('collapsed')) expand();
+        else collapse();
+      };
+
+      toggle.addEventListener('click', onToggle);
+      itemEl.querySelector('.tree-folder').addEventListener('click', onToggle);
+
+      // Restore a previously-expanded folder after a refresh by re-listing it.
+      if (wasExpanded) {
+        loaded = true;
+        renderLazyChildrenInto(directoryHandle, childrenEl, depth + 1, path)
+          .catch(err => error('[FS] Failed to restore folder:', path, err));
+      }
+
+      return itemEl;
+    }
+
+    function makeFileEl(fileHandle, depth, path) {
+      const itemEl = document.createElement('div');
+      itemEl.className = 'tree-item';
+      itemEl.style.paddingLeft = depth * 12 + 'px';
+      itemEl.innerHTML = `
+        <div class="tree-file md">
+          <div class="icon">📄</div>
+          <span>${escapeHtml(fileHandle.name)}</span>
+        </div>
+      `;
+      const node = { name: fileHandle.name, path, handle: fileHandle };
+      itemEl.querySelector('.tree-file').addEventListener('click', () => openTab(node));
+      return itemEl;
+    }
+
+    async function reconcileTabsLazy() {
+      const kept = [];
+      for (const tab of tabs) {
+        const node = await resolveFileNode(tab.file.path);
+        if (node) kept.push({ file: node, content: null });
+      }
+      tabs = kept;
+      if (activeTabIndex >= tabs.length) activeTabIndex = tabs.length - 1;
+    }
+
+    // Resolve a slash path (e.g. "root/sub/doc.md") to a file node, walking the
+    // live directory handles in lazy mode, or the in-memory tree in fallback.
+    async function resolveFileNode(targetPath) {
+      if (dirHandle) {
+        const parts = targetPath.split('/').filter(Boolean);
+        if (parts.length === 0) return null;
+        const start = parts[0] === dirHandle.name ? 1 : 0;
+        let dir = dirHandle;
+        try {
+          for (let i = start; i < parts.length - 1; i++) {
+            dir = await dir.getDirectoryHandle(parts[i]);
+          }
+          const fileHandle = await dir.getFileHandle(parts[parts.length - 1]);
+          return { name: fileHandle.name, path: targetPath, handle: fileHandle };
+        } catch (err) {
+          warn('[FS] Path not found:', targetPath, err);
+          return null;
+        }
+      }
+      return findFileByPath(targetPath);
+    }
+
+    async function getFileFromNode(node) {
+      if (node.handle && node.handle.getFile) return await node.handle.getFile();
+      if (node.file instanceof File) return node.file;
+      return null;
     }
 
     function handleFolderSelect(e) {
@@ -935,53 +1114,65 @@
       });
     }
 
-    function loadAndRenderTab(index, anchorToScroll = null) {
+    async function loadAndRenderTab(index, anchorToScroll = null) {
       if (index < 0 || index >= tabs.length) return;
 
       const tab = tabs[index];
 
       if (tab.content) {
         renderTabContent(tab.content, tab.file.path, anchorToScroll);
-      } else {
-        if (!tab.file || !tab.file.file || !(tab.file.file instanceof File)) {
-          error('[SECURITY] Invalid file object.');
-          return;
-        }
-
-        const reader = new FileReader();
-        reader.onerror = (e) => {
-          error('[SECURITY] FileReader error:', e);
-        };
-        reader.onload = (e) => {
-          const markdown = e.target.result;
-          
-          // ====================================================================
-          // SECURITY: PARSE WITH SANITIZATION
-          // marked.parse() can create XSS vectors, so we sanitize with DOMPurify
-          // ====================================================================
-          const html = marked.parse(markdown);
-          const clean = window.DOMPurify.sanitize(html, {
-            ALLOWED_TAGS: [
-              'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-              'p', 'br', 'strong', 'em', 'u', 'del',
-              'ul', 'ol', 'li',
-              'blockquote',
-              'pre', 'code',
-              'a',
-              'img',
-              'table', 'thead', 'tbody', 'tr', 'th', 'td',
-              'hr'
-            ],
-            ALLOWED_ATTR: ['href', 'title', 'alt', 'src', 'width', 'height', 'id'],
-            KEEP_CONTENT: true,
-            ALLOW_DATA_ATTR: false
-          });
-
-          tab.content = clean;
-          renderTabContent(clean, tab.file.path, anchorToScroll);
-        };
-        reader.readAsText(tab.file.file);
+        return;
       }
+
+      let file;
+      try {
+        file = await getFileFromNode(tab.file);
+      } catch (err) {
+        error('[SECURITY] Could not read file:', err);
+        updateBreadcrumb('❌ Could not read the file — the folder may have changed');
+        return;
+      }
+      if (!file) {
+        error('[SECURITY] Invalid file object.');
+        return;
+      }
+
+      // ====================================================================
+      // SECURITY: enforce the size cap at read time (lazy entries are not
+      // pre-validated), before pulling the whole file into memory.
+      // ====================================================================
+      if (file.size > MAX_FILE_SIZE) {
+        error(`[SECURITY] File too large (${file.size} bytes): ${file.name}`);
+        updateBreadcrumb(`❌ File too large (max 10MB): ${file.name}`);
+        return;
+      }
+
+      const markdown = await file.text();
+
+      // ====================================================================
+      // SECURITY: PARSE WITH SANITIZATION
+      // marked.parse() can create XSS vectors, so we sanitize with DOMPurify
+      // ====================================================================
+      const html = marked.parse(markdown);
+      const clean = window.DOMPurify.sanitize(html, {
+        ALLOWED_TAGS: [
+          'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+          'p', 'br', 'strong', 'em', 'u', 'del',
+          'ul', 'ol', 'li',
+          'blockquote',
+          'pre', 'code',
+          'a',
+          'img',
+          'table', 'thead', 'tbody', 'tr', 'th', 'td',
+          'hr'
+        ],
+        ALLOWED_ATTR: ['href', 'title', 'alt', 'src', 'width', 'height', 'id'],
+        KEEP_CONTENT: true,
+        ALLOW_DATA_ATTR: false
+      });
+
+      tab.content = clean;
+      renderTabContent(clean, tab.file.path, anchorToScroll);
     }
 
     function renderTabContent(html, path, anchorToScroll = null) {
@@ -1097,14 +1288,14 @@
       });
       
       const resolvedPath = resolveRelativePath(currentDocPath, filePath);
-      const matchingFile = findFileByPath(resolvedPath);
-      
-      if (matchingFile) {
-        log('✅ File found:', resolvedPath);
-        openTab(matchingFile, anchor);
-      } else {
-        warn(`❌ File not found: "${resolvedPath}" (from "${currentDocPath}", link: "${filePath}")`);
-      }
+      resolveFileNode(resolvedPath).then(matchingFile => {
+        if (matchingFile) {
+          log('✅ File found:', resolvedPath);
+          openTab(matchingFile, anchor);
+        } else {
+          warn(`❌ File not found: "${resolvedPath}" (from "${currentDocPath}", link: "${filePath}")`);
+        }
+      });
     }
 
     function resolveRelativePath(currentPath, relativePath) {
@@ -1192,7 +1383,7 @@
       if (customMessage) {
         // Use custom message (for status feedback)
         breadcrumbEl.textContent = customMessage;
-      } else if (!fileSystem) {
+      } else if (!fileSystem && !dirHandle) {
         breadcrumbEl.textContent = 'Select a folder to begin';
       } else if (activeTabIndex >= 0 && activeTabIndex < tabs.length) {
         breadcrumbEl.textContent = tabs[activeTabIndex].file.path;

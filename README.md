@@ -10,7 +10,7 @@ A lightweight, offline markdown explorer. Browse local markdown files with a spl
 
 ## Features
 
-- 📁 **File Explorer** — Browse local markdown files in a collapsible tree
+- 📁 **File Explorer** — Real folder tree: every sub-folder is shown (even ones with no `.md`) and read **lazily**, only when you expand it — no slow up-front scan (Chromium browsers; see note below)
 - 🔄 **Refresh** — Re-scan the current folder to pick up new/changed files without re-selecting it (Chromium browsers; see note below)
 - 📄 **Live Preview** — Renders markdown to HTML with proper formatting
 - 🔗 **Smart Navigation** — Jump between documents with internal and cross-document anchors
@@ -58,7 +58,7 @@ Click any `.md` file to view it rendered.
 - **Links** → Click to navigate (same doc, other docs, external URLs)
 - **Anchors** → `[text](#heading)` or `[text](other.md#heading)` work
 
-> **Refresh caveat:** silent re-scanning uses the [File System Access API](https://developer.mozilla.org/docs/Web/API/File_System_API), available in **Chromium browsers (Chrome/Edge)**. There, Refresh re-reads the same folder in place, preserving your open tabs and expanded folders. On **Firefox/Safari** (which lack the API) the button re-opens the native folder picker instead.
+> **Explorer & refresh caveat:** the lazy folder tree and silent re-scanning both rely on the [File System Access API](https://developer.mozilla.org/docs/Web/API/File_System_API), available in **Chromium browsers (Chrome/Edge)**. There you get the full experience: every sub-folder is shown and read only when expanded, and Refresh re-reads the same folder in place, preserving your open tabs and expanded folders. On **Firefox/Safari** (which lack the API) the app falls back to a one-time flat listing of your `.md` files via the native picker, and Refresh re-opens that picker. The app shows a hint suggesting Chrome/Edge on those browsers.
 
 ### Markdown Features Supported
 
