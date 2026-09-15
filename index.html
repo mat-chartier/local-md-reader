@@ -358,6 +358,16 @@
       margin-bottom: 12px;
     }
 
+    .plaintext-content {
+      font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      color: #333;
+      white-space: pre-wrap;
+      word-break: break-word;
+      margin: 0;
+    }
+
     .markdown-content pre code {
       background: none;
       padding: 0;
@@ -533,6 +543,10 @@
         border-color: #3a3a3a;
       }
 
+      .plaintext-content {
+        color: #e0e0e0;
+      }
+
       .markdown-content blockquote {
         border-left-color: #0088ff;
         color: #999;
@@ -579,13 +593,14 @@
   <header>
     <button id="openFolderBtn">📁 Open Folder</button>
     <button id="refreshBtn" style="display: none;">🔄 Refresh</button>
+    <button id="toggleSourceBtn" style="display: none;">&lt;/&gt; Source</button>
     <button id="scrollTopBtn" style="display: none;">⬆ Top</button>
     <input type="file" id="folderInput" webkitdirectory>
     <div class="breadcrumb" id="breadcrumb">Select a folder to begin</div>
   </header>
 
   <div id="browserHint" class="browser-hint" style="display: none;">
-    💡 For the full folder explorer — browse into <em>any</em> sub-folder, no up-front scan — open this page in <strong>Chrome</strong> or <strong>Edge</strong>. Other browsers still work with a one-time flat listing of your <code>.md</code> files.
+    💡 For the full folder explorer — browse into <em>any</em> sub-folder, no up-front scan — open this page in <strong>Chrome</strong> or <strong>Edge</strong>. Other browsers still work with a one-time flat listing of your text files.
   </div>
 
   <div class="container">
@@ -600,7 +615,7 @@
       <div class="tabs-container" id="tabsContainer"></div>
       <div class="viewer-content" id="viewerContent">
         <div class="empty-state">
-          <p>👈 Select a .md file on the left to start</p>
+          <p>👈 Select a file on the left to start</p>
         </div>
       </div>
     </div>
@@ -622,7 +637,35 @@
     // Prevent loading huge files into memory
     // ====================================================================
     const MAX_FILE_SIZE = 10 * 1024 * 1024;  // 10 MB
-    const ALLOWED_EXTENSIONS = ['.md', '.markdown'];
+
+    // ====================================================================
+    // VIEWABLE FILE TYPES
+    // markdown -> rendered via marked ; html -> sanitized render + source
+    // toggle ; everything else in the list -> shown as plain text.
+    // ====================================================================
+    const MARKDOWN_EXTENSIONS = ['.md', '.markdown'];
+    const HTML_EXTENSIONS = ['.html', '.htm'];
+    const TEXT_EXTENSIONS = [
+      '.txt', '.text', '.log', '.csv', '.tsv', '.json', '.xml', '.yml', '.yaml',
+      '.ini', '.toml', '.conf', '.cfg', '.env', '.properties',
+      '.js', '.mjs', '.cjs', '.ts', '.tsx', '.jsx', '.css', '.scss', '.less',
+      '.py', '.rb', '.php', '.go', '.rs', '.java', '.kt', '.c', '.h', '.cpp',
+      '.hpp', '.cs', '.swift', '.sh', '.bash', '.zsh', '.ps1', '.sql', '.r',
+      '.pl', '.lua', '.dart', '.gradle', '.svg'
+    ];
+    const ALLOWED_EXTENSIONS = [...MARKDOWN_EXTENSIONS, ...HTML_EXTENSIONS, ...TEXT_EXTENSIONS];
+
+    function fileKind(name) {
+      const n = name.toLowerCase();
+      if (MARKDOWN_EXTENSIONS.some(e => n.endsWith(e))) return 'markdown';
+      if (HTML_EXTENSIONS.some(e => n.endsWith(e))) return 'html';
+      return 'text';
+    }
+
+    function fileIcon(name) {
+      const k = fileKind(name);
+      return k === 'html' ? '🌐' : (k === 'markdown' ? '📄' : '📃');
+    }
 
     let fileSystem = null;
     let tabs = [];
@@ -651,6 +694,13 @@
 
     document.getElementById('openFolderBtn').addEventListener('click', openFolder);
     refreshBtn.addEventListener('click', refreshFolder);
+
+    document.getElementById('toggleSourceBtn').addEventListener('click', () => {
+      const tab = tabs[activeTabIndex];
+      if (!tab || tab.kind !== 'html') return;
+      tab.view = tab.view === 'source' ? 'preview' : 'source';
+      renderTabView(tab);
+    });
 
     document.getElementById('scrollTopBtn').addEventListener('click', () => {
       document.getElementById('viewerContent').scrollTop = 0;
@@ -827,7 +877,7 @@
       itemEl.style.paddingLeft = depth * 12 + 'px';
       itemEl.innerHTML = `
         <div class="tree-file md">
-          <div class="icon">📄</div>
+          <div class="icon">${fileIcon(fileHandle.name)}</div>
           <span>${escapeHtml(fileHandle.name)}</span>
         </div>
       `;
@@ -840,7 +890,7 @@
       const kept = [];
       for (const tab of tabs) {
         const node = await resolveFileNode(tab.file.path);
-        if (node) kept.push({ file: node, content: null });
+        if (node) kept.push({ file: node, raw: null, kind: null, view: tab.view });
       }
       tabs = kept;
       if (activeTabIndex >= tabs.length) activeTabIndex = tabs.length - 1;
@@ -900,7 +950,7 @@
           file.name.toLowerCase().endsWith(ext)
         );
         if (!hasValidExt) {
-          log(`[INFO] Skipped non-markdown file: ${file.name}`);
+          log(`[INFO] Skipped unsupported file: ${file.name}`);
           return false;
         }
         if (file.size > MAX_FILE_SIZE) {
@@ -913,19 +963,19 @@
       const skippedCount = entries.length - validEntries.length;
 
       if (validEntries.length === 0) {
-        updateBreadcrumb(`❌ No markdown files found (${skippedCount} non-markdown files ignored)`);
+        updateBreadcrumb(`❌ No viewable files found (${skippedCount} unsupported files ignored)`);
         fileSystem = null;
         tabs = [];
         activeTabIndex = -1;
-        document.getElementById('tree').innerHTML = '<p style="color: var(--text-secondary); padding: 10px;">No .md or .markdown files in this folder</p>';
+        document.getElementById('tree').innerHTML = '<p style="color: var(--text-secondary); padding: 10px;">No viewable text files in this folder</p>';
         renderTabs();
         refreshBtn.style.display = 'inline-block';
         return;
       }
 
       const loaded = skippedCount > 0
-        ? `Loaded ${validEntries.length} markdown file(s), ignored ${skippedCount} other file(s)`
-        : `Loaded ${validEntries.length} markdown file(s)`;
+        ? `Loaded ${validEntries.length} file(s), ignored ${skippedCount} other file(s)`
+        : `Loaded ${validEntries.length} file(s)`;
       log(`[INFO] ${loaded}`);
 
       fileSystem = buildFileTree(validEntries);
@@ -960,7 +1010,7 @@
       const kept = [];
       for (const oldTab of oldTabs) {
         const node = findFileByPath(oldTab.file.path);
-        if (node) kept.push({ file: node, content: null });
+        if (node) kept.push({ file: node, raw: null, kind: null, view: oldTab.view });
       }
       tabs = kept;
       if (activeTabIndex >= tabs.length) activeTabIndex = tabs.length - 1;
@@ -1043,7 +1093,7 @@
         } else if (ALLOWED_EXTENSIONS.some(ext => item.name.toLowerCase().endsWith(ext))) {
           itemEl.innerHTML = `
             <div class="tree-file md">
-              <div class="icon">📄</div>
+              <div class="icon">${fileIcon(item.name)}</div>
               <span>${escapeHtml(item.name)}</span>
             </div>
           `;
@@ -1065,7 +1115,9 @@
       } else {
         tabs.push({
           file: fileObj,
-          content: null
+          raw: null,
+          kind: null,
+          view: 'preview'
         });
         activeTabIndex = tabs.length - 1;
       }
@@ -1127,65 +1179,131 @@
       });
     }
 
+    // ====================================================================
+    // SECURITY: DOMPurify configs. Markdown uses a tight whitelist; HTML
+    // files use a broader (but still safe) one. Scripts, event handlers,
+    // and framing/embedding tags are stripped in both; external network
+    // resources are additionally blocked by the CSP.
+    // ====================================================================
+    const MD_SANITIZE = {
+      ALLOWED_TAGS: [
+        'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+        'p', 'br', 'strong', 'em', 'u', 'del',
+        'ul', 'ol', 'li',
+        'blockquote',
+        'pre', 'code',
+        'a',
+        'img',
+        'table', 'thead', 'tbody', 'tr', 'th', 'td',
+        'hr'
+      ],
+      ALLOWED_ATTR: ['href', 'title', 'alt', 'src', 'width', 'height', 'id'],
+      KEEP_CONTENT: true,
+      ALLOW_DATA_ATTR: false
+    };
+
+    const HTML_SANITIZE = {
+      ALLOWED_TAGS: [
+        'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+        'p', 'br', 'hr', 'strong', 'em', 'b', 'i', 'u', 's', 'del', 'ins',
+        'small', 'mark', 'sub', 'sup', 'abbr', 'cite', 'q', 'kbd', 'samp',
+        'var', 'time', 'address',
+        'ul', 'ol', 'li', 'dl', 'dt', 'dd',
+        'blockquote', 'pre', 'code',
+        'a', 'img',
+        'table', 'thead', 'tbody', 'tfoot', 'tr', 'th', 'td', 'caption', 'colgroup', 'col',
+        'div', 'span', 'section', 'article', 'header', 'footer', 'nav', 'aside',
+        'main', 'figure', 'figcaption', 'details', 'summary'
+      ],
+      ALLOWED_ATTR: [
+        'href', 'title', 'alt', 'src', 'width', 'height', 'id', 'class', 'style',
+        'colspan', 'rowspan', 'scope', 'align', 'start', 'reversed', 'type',
+        'datetime', 'lang', 'dir'
+      ],
+      ALLOW_DATA_ATTR: false,
+      FORBID_TAGS: ['script', 'style', 'iframe', 'object', 'embed', 'form', 'input',
+                    'button', 'textarea', 'select', 'base', 'link', 'meta'],
+      FORBID_ATTR: ['srcset', 'ping', 'target', 'formaction']
+    };
+
     async function loadAndRenderTab(index, anchorToScroll = null) {
       if (index < 0 || index >= tabs.length) return;
 
       const tab = tabs[index];
 
-      if (tab.content) {
-        renderTabContent(tab.content, tab.file.path, anchorToScroll);
-        return;
+      // Read (and cache) the raw text once; parsing/rendering is cheap and
+      // re-done on tab switch or source/preview toggle.
+      if (tab.raw == null) {
+        let file;
+        try {
+          file = await getFileFromNode(tab.file);
+        } catch (err) {
+          error('[SECURITY] Could not read file:', err);
+          updateBreadcrumb('❌ Could not read the file — the folder may have changed');
+          return;
+        }
+        if (!file) {
+          error('[SECURITY] Invalid file object.');
+          return;
+        }
+
+        // ================================================================
+        // SECURITY: enforce the size cap at read time (lazy entries are not
+        // pre-validated), before pulling the whole file into memory.
+        // ================================================================
+        if (file.size > MAX_FILE_SIZE) {
+          error(`[SECURITY] File too large (${file.size} bytes): ${file.name}`);
+          updateBreadcrumb(`❌ File too large (max 10MB): ${file.name}`);
+          return;
+        }
+
+        tab.raw = await file.text();
+        tab.kind = fileKind(tab.file.name);
+        if (tab.view == null) tab.view = 'preview';
       }
 
-      let file;
-      try {
-        file = await getFileFromNode(tab.file);
-      } catch (err) {
-        error('[SECURITY] Could not read file:', err);
-        updateBreadcrumb('❌ Could not read the file — the folder may have changed');
-        return;
+      renderTabView(tab, anchorToScroll);
+    }
+
+    function renderTabView(tab, anchorToScroll = null) {
+      // ====================================================================
+      // SECURITY: markdown and HTML are always sanitized before insertion;
+      // plain text is rendered via textContent (never interpreted as HTML).
+      // ====================================================================
+      if (tab.kind === 'markdown') {
+        const clean = window.DOMPurify.sanitize(marked.parse(tab.raw), MD_SANITIZE);
+        renderTabContent(clean, tab.file.path, anchorToScroll);
+      } else if (tab.kind === 'html' && tab.view !== 'source') {
+        const clean = window.DOMPurify.sanitize(tab.raw, HTML_SANITIZE);
+        renderTabContent(clean, tab.file.path, anchorToScroll);
+      } else {
+        renderPlainText(tab.raw, tab.file.path);
       }
-      if (!file) {
-        error('[SECURITY] Invalid file object.');
-        return;
+      renderViewToggle(tab);
+    }
+
+    function renderPlainText(raw, path) {
+      const viewerContent = document.getElementById('viewerContent');
+      viewerContent.scrollTop = 0;
+
+      const pre = document.createElement('pre');
+      pre.className = 'plaintext-content';
+      pre.textContent = raw;              // textContent => no HTML is ever interpreted
+      pre.dataset.docPath = path;
+
+      viewerContent.innerHTML = '';
+      viewerContent.appendChild(pre);
+      document.getElementById('scrollTopBtn').style.display = 'inline-block';
+    }
+
+    function renderViewToggle(tab) {
+      const btn = document.getElementById('toggleSourceBtn');
+      if (tab && tab.kind === 'html') {
+        btn.style.display = 'inline-block';
+        btn.textContent = tab.view === 'source' ? '👁 Preview' : '</> Source';
+      } else {
+        btn.style.display = 'none';
       }
-
-      // ====================================================================
-      // SECURITY: enforce the size cap at read time (lazy entries are not
-      // pre-validated), before pulling the whole file into memory.
-      // ====================================================================
-      if (file.size > MAX_FILE_SIZE) {
-        error(`[SECURITY] File too large (${file.size} bytes): ${file.name}`);
-        updateBreadcrumb(`❌ File too large (max 10MB): ${file.name}`);
-        return;
-      }
-
-      const markdown = await file.text();
-
-      // ====================================================================
-      // SECURITY: PARSE WITH SANITIZATION
-      // marked.parse() can create XSS vectors, so we sanitize with DOMPurify
-      // ====================================================================
-      const html = marked.parse(markdown);
-      const clean = window.DOMPurify.sanitize(html, {
-        ALLOWED_TAGS: [
-          'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-          'p', 'br', 'strong', 'em', 'u', 'del',
-          'ul', 'ol', 'li',
-          'blockquote',
-          'pre', 'code',
-          'a',
-          'img',
-          'table', 'thead', 'tbody', 'tr', 'th', 'td',
-          'hr'
-        ],
-        ALLOWED_ATTR: ['href', 'title', 'alt', 'src', 'width', 'height', 'id'],
-        KEEP_CONTENT: true,
-        ALLOW_DATA_ATTR: false
-      });
-
-      tab.content = clean;
-      renderTabContent(clean, tab.file.path, anchorToScroll);
     }
 
     function renderTabContent(html, path, anchorToScroll = null) {
@@ -1199,9 +1317,9 @@
       // ⚠️ Already sanitized by DOMPurify above, but use textContent for extra safety
       wrapper.innerHTML = html;
 
-      // Generate normalized IDs for all headings
+      // Generate normalized IDs for headings (keep any existing id, e.g. in HTML files)
       wrapper.querySelectorAll('h1, h2, h3, h4, h5, h6').forEach(heading => {
-        heading.id = generateSlug(heading.textContent);
+        if (!heading.id) heading.id = generateSlug(heading.textContent);
       });
 
       wrapper.dataset.docPath = path;
@@ -1383,9 +1501,10 @@
       const viewerContent = document.getElementById('viewerContent');
       const scrollTopBtn = document.getElementById('scrollTopBtn');
       scrollTopBtn.style.display = 'none';
+      document.getElementById('toggleSourceBtn').style.display = 'none';
       viewerContent.innerHTML = `
         <div class="empty-state">
-          <p>👈 Select a .md file on the left to start</p>
+          <p>👈 Select a file on the left to start</p>
         </div>
       `;
     }

@@ -1,6 +1,6 @@
 # Local Markdown Reader
 
-A lightweight, offline markdown explorer. Browse local markdown files with a split-pane interface, internal/cross-document anchors, and multiple tabs. **100% client-side, no server needed.**
+A lightweight, offline document explorer. Browse local **markdown, HTML, and text/code files** with a split-pane interface, internal/cross-document anchors, and multiple tabs. **100% client-side, no server needed.**
 
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
 ![Security: Hardened](https://img.shields.io/badge/Security-Hardened-green.svg)
@@ -13,6 +13,7 @@ A lightweight, offline markdown explorer. Browse local markdown files with a spl
 - 📁 **File Explorer** — Real folder tree: every sub-folder is shown (even ones with no `.md`) and read **lazily**, only when you expand it — no slow up-front scan (Chromium browsers; see note below)
 - 🔄 **Refresh** — Re-scan the current folder to pick up new/changed files without re-selecting it (Chromium browsers; see note below)
 - 📄 **Live Preview** — Renders markdown to HTML with proper formatting
+- 📃 **Many file types** — Markdown, HTML, and plain-text/code files (`.txt`, `.json`, `.csv`, `.log`, `.xml`, `.yml`, `.js`, `.py`, `.css`, …). HTML renders sanitized with a **source ⇄ preview** toggle; other text files show as plain text
 - 🔗 **Smart Navigation** — Jump between documents with internal and cross-document anchors
 - 📑 **Multi-Tab Support** — Open multiple files at once, cached for performance
 - 📏 **Resizable Panes** — Drag the splitter to adjust explorer/viewer width
@@ -55,10 +56,21 @@ Click any `.md` file to view it rendered.
 - **× on tab** → Close tab
 - **Drag splitter** → Resize panes
 - **⬆ Top button** → Scroll to top
+- **`</> Source` / `👁 Preview`** → For HTML files, toggle between the sanitized render and the raw source
 - **Links** → Click to navigate (same doc, other docs, external URLs)
 - **Anchors** → `[text](#heading)` or `[text](other.md#heading)` work
 
 > **Explorer & refresh caveat:** the lazy folder tree and silent re-scanning both rely on the [File System Access API](https://developer.mozilla.org/docs/Web/API/File_System_API), available in **Chromium browsers (Chrome/Edge)**. There you get the full experience: every sub-folder is shown and read only when expanded, and Refresh re-reads the same folder in place, preserving your open tabs and expanded folders. On **Firefox/Safari** (which lack the API) the app falls back to a one-time flat listing of your `.md` files via the native picker. There, Refresh re-opens the picker so you re-pick the folder — but it **preserves your open tabs and expanded folders** and re-reads file contents, so it's a real reload rather than a fresh start. The app shows a hint suggesting Chrome/Edge on those browsers.
+
+### Supported File Types
+
+| Type | Extensions | How it's shown |
+|------|------------|----------------|
+| Markdown | `.md`, `.markdown` | Rendered to HTML (sanitized) |
+| HTML | `.html`, `.htm` | Sanitized render by default, with a **`</> Source` ⇄ `👁 Preview`** toggle |
+| Text / code | `.txt`, `.log`, `.csv`, `.json`, `.xml`, `.yml`/`.yaml`, `.ini`, `.js`, `.ts`, `.css`, `.py`, `.sh`, `.sql`, … | Plain text in a `<pre>` block (never interpreted as HTML) |
+
+> All rendered HTML — from markdown or from `.html` files — is sanitized with DOMPurify (scripts, event handlers, forms and framing tags are stripped), and the CSP blocks any external resource. Plain-text files are inserted via `textContent`, so their contents are never executed.
 
 ### Markdown Features Supported
 
