@@ -58,7 +58,7 @@ Click any `.md` file to view it rendered.
 - **Links** → Click to navigate (same doc, other docs, external URLs)
 - **Anchors** → `[text](#heading)` or `[text](other.md#heading)` work
 
-> **Explorer & refresh caveat:** the lazy folder tree and silent re-scanning both rely on the [File System Access API](https://developer.mozilla.org/docs/Web/API/File_System_API), available in **Chromium browsers (Chrome/Edge)**. There you get the full experience: every sub-folder is shown and read only when expanded, and Refresh re-reads the same folder in place, preserving your open tabs and expanded folders. On **Firefox/Safari** (which lack the API) the app falls back to a one-time flat listing of your `.md` files via the native picker, and Refresh re-opens that picker. The app shows a hint suggesting Chrome/Edge on those browsers.
+> **Explorer & refresh caveat:** the lazy folder tree and silent re-scanning both rely on the [File System Access API](https://developer.mozilla.org/docs/Web/API/File_System_API), available in **Chromium browsers (Chrome/Edge)**. There you get the full experience: every sub-folder is shown and read only when expanded, and Refresh re-reads the same folder in place, preserving your open tabs and expanded folders. On **Firefox/Safari** (which lack the API) the app falls back to a one-time flat listing of your `.md` files via the native picker. There, Refresh re-opens the picker so you re-pick the folder — but it **preserves your open tabs and expanded folders** and re-reads file contents, so it's a real reload rather than a fresh start. The app shows a hint suggesting Chrome/Edge on those browsers.
 
 ### Markdown Features Supported
 

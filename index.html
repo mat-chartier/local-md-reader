@@ -638,11 +638,12 @@
     const supportsFsAccess = 'showDirectoryPicker' in window;
     let dirHandle = null;                 // live handle when FS Access is used
     let expandedFolders = new Set();      // folder paths kept open across renders
+    let pendingRefresh = false;           // true = next input selection is a refresh, not a fresh open
 
     const refreshBtn = document.getElementById('refreshBtn');
     refreshBtn.title = supportsFsAccess
       ? 'Reload files from the current folder'
-      : 'Your browser can\'t re-read the folder silently — this re-opens the picker';
+      : 'Re-pick the folder to reload (keeps your open tabs and expanded folders)';
 
     if (!supportsFsAccess) {
       document.getElementById('browserHint').style.display = 'block';
@@ -672,8 +673,9 @@
           error('[FS] showDirectoryPicker failed, falling back to input:', err);
         }
       }
-      // Fallback: legacy folder picker (no live handle)
+      // Fallback: legacy folder picker (no live handle), fresh open
       dirHandle = null;
+      pendingRefresh = false;
       document.getElementById('folderInput').click();
     }
 
@@ -682,8 +684,11 @@
         await loadFromDirHandle({ resetTabs: false });
         return;
       }
-      // No live handle (Firefox/Safari): re-open the native picker
-      document.getElementById('folderInput').click();
+      // No live handle (Firefox/Safari): re-pick the folder, but preserve state.
+      pendingRefresh = true;
+      const input = document.getElementById('folderInput');
+      input.value = '';   // ensure `change` fires even if the same folder is re-chosen
+      input.click();
     }
 
     async function loadFromDirHandle({ resetTabs }) {
@@ -870,17 +875,20 @@
     }
 
     function handleFolderSelect(e) {
+      const isRefresh = pendingRefresh;
+      pendingRefresh = false;
+
       const entries = Array.from(e.target.files).map(file => ({
         file,
         relativePath: file.webkitRelativePath
       }));
       if (entries.length === 0) {
-        updateBreadcrumb('No folder selected');
+        updateBreadcrumb(isRefresh ? 'Refresh cancelled' : 'No folder selected');
         return;
       }
-      dirHandle = null;              // input-based selection has no live handle
-      expandedFolders = new Set();
-      ingestEntries(entries, { resetTabs: true });
+      dirHandle = null;                              // input-based selection has no live handle
+      if (!isRefresh) expandedFolders = new Set();   // fresh open starts collapsed; refresh keeps state
+      ingestEntries(entries, { resetTabs: !isRefresh });
     }
 
     function ingestEntries(entries, { resetTabs = true } = {}) {
