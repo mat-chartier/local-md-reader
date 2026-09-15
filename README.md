@@ -11,6 +11,7 @@ A lightweight, offline markdown explorer. Browse local markdown files with a spl
 ## Features
 
 - 📁 **File Explorer** — Browse local markdown files in a collapsible tree
+- 🔄 **Refresh** — Re-scan the current folder to pick up new/changed files without re-selecting it (Chromium browsers; see note below)
 - 📄 **Live Preview** — Renders markdown to HTML with proper formatting
 - 🔗 **Smart Navigation** — Jump between documents with internal and cross-document anchors
 - 📑 **Multi-Tab Support** — Open multiple files at once, cached for performance
@@ -46,6 +47,8 @@ Click any `.md` file to view it rendered.
 
 ### Keyboard & Mouse
 
+- **📁 Open Folder** → Pick a folder of `.md` files
+- **🔄 Refresh** → Re-scan the current folder for new/changed files (see caveat below)
 - **Click folder** → Expand/collapse
 - **Click file** → Open in new tab
 - **Click tab** → Switch between files
@@ -54,6 +57,8 @@ Click any `.md` file to view it rendered.
 - **⬆ Top button** → Scroll to top
 - **Links** → Click to navigate (same doc, other docs, external URLs)
 - **Anchors** → `[text](#heading)` or `[text](other.md#heading)` work
+
+> **Refresh caveat:** silent re-scanning uses the [File System Access API](https://developer.mozilla.org/docs/Web/API/File_System_API), available in **Chromium browsers (Chrome/Edge)**. There, Refresh re-reads the same folder in place, preserving your open tabs and expanded folders. On **Firefox/Safari** (which lack the API) the button re-opens the native folder picker instead.
 
 ### Markdown Features Supported
 
