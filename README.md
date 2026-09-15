@@ -18,8 +18,8 @@ A lightweight, offline markdown explorer. Browse local markdown files with a spl
 - 📏 **Resizable Panes** — Drag the splitter to adjust explorer/viewer width
 - 🌙 **Dark Mode** — Auto-adapts to system theme
 - 🇫🇷 **Unicode-Friendly** — Handles accents and special characters in anchor links
-- ⚡ **Lightweight** — Just two small libraries (marked.js + DOMPurify), no build step, no server
-- 🔒 **Security-Hardened** — XSS protection, CSP, sanitization, file validation, SRI
+- ⚡ **Lightweight & self-contained** — marked.js + DOMPurify vendored inline in one HTML file; no build step, no server, no network
+- 🔒 **Security-Hardened** — XSS protection, strict CSP, sanitization, file validation, zero external requests
 
 ---
 
@@ -98,9 +98,9 @@ my-docs/
 🔒 **File Validation** — Extension & size checks (max 10MB)  
 🔒 **Link Validation** — Dangerous protocols blocked  
 🔒 **Debug Isolation** — No sensitive data in console  
-🔒 **Subresource Integrity** — CDN scripts pinned with SHA-384 checksums (active)  
+🔒 **Zero external requests** — `marked.js` and `DOMPurify` are **vendored inline** (no CDN), so the page makes **no network requests at all**  
 
-> **Note on "offline":** document reading, parsing, and rendering all happen locally — no file content or telemetry ever leaves your device. The only network access is the **one-time load of `marked.js` and `DOMPurify` from CDN** (cached by the browser afterward). A fully self-contained, vendored build is on the roadmap.
+> **Truly offline & private:** everything — reading, parsing, rendering, and both libraries — is contained in the single `index.html`. The page issues **zero outbound network requests**, on `file://` and on GitHub Pages alike. No file content, and no metadata (not even your IP to a CDN), ever leaves your device. Enforced by CSP (`default-src 'none'; connect-src 'none'; img-src 'self' data:`) plus DOMPurify sanitization. See [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) for the bundled libraries and their licenses.
 
 See [SECURITY.md](SECURITY.md) for detailed threat model, attack scenarios, and deployment guidelines.
 
@@ -128,36 +128,24 @@ npx http-server .
 
 ---
 
-## Advanced: SRI Checksums
+## Advanced: Updating the Vendored Libraries
 
-Subresource Integrity is **already active** — both CDN scripts in `index.html` are pinned
-with SHA-384 `integrity` attributes, so the browser rejects any tampered CDN response.
-
-You only need to regenerate the checksums if you **bump a library version**:
-
-### 1. Generate Checksums
-```bash
-python3 generate_sri_checksums.py
-```
-
-### 2. Update the `integrity="sha384-..."` attributes in index.html
-```html
-<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/13.0.1/marked.min.js"
-        integrity="sha384-YOUR_CHECKSUM_HERE"
-        crossorigin="anonymous"
-        referrerpolicy="no-referrer"></script>
-```
+`marked.js` and `DOMPurify` are **bundled inline** in `index.html` (no CDN, no
+Subresource Integrity needed since nothing is fetched at runtime). To bump a
+version, download the exact minified build, verify its SHA-384, and replace the
+matching inline `<script>` block — keeping its license header comment intact.
+Full step-by-step and the pinned checksums are in
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
 ---
 
 ## Technical Stack
 
-- **Vanilla JavaScript** (single ~1150-line `index.html`, no build tools)
-- **Marked.js** (CDN) for markdown rendering
-- **DOMPurify** (CDN) for XSS prevention
-- **File API** for local file access (no backend)
+- **Vanilla JavaScript** (single self-contained `index.html`, no build tools)
+- **Marked.js** (vendored inline) for markdown rendering
+- **DOMPurify** (vendored inline) for XSS prevention
+- **File System Access API / File API** for local file access (no backend)
 - **CSS Grid & Flexbox** for responsive UI
-- **Web Workers Ready** (future enhancement)
 
 ---
 
@@ -206,7 +194,7 @@ Navigate API documentation, changelogs, guides.
 
 | Metric | Value |
 |--------|-------|
-| Initial Load | <100ms (after CDN scripts are cached) |
+| Initial Load | <100ms (no network — everything is inline) |
 | File Open | <50ms (from cache) |
 | Render | <200ms (marked + DOMPurify) |
 | Memory (10 files) | ~5MB |
@@ -216,8 +204,8 @@ Navigate API documentation, changelogs, guides.
 
 ## Troubleshooting
 
-### Issue: Scripts don't load
-**Solution:** The first load needs internet access to fetch `marked.js` and `DOMPurify` from CDN (cached by the browser afterward). If a CDN response is tampered with, the SRI check will block it — re-download a clean `index.html`. A fully vendored, network-free build is on the roadmap.
+### Issue: Nothing renders / blank page
+**Check DevTools Console (F12).** The app needs **no network** — `marked.js` and `DOMPurify` are bundled inside `index.html`. If the page is blank, make sure the file was downloaded whole (≈100 KB) and not truncated.
 
 ### Issue: Markdown doesn't render
 **Check DevTools Console (F12)** for CSP violations or script errors.
@@ -275,7 +263,7 @@ MIT License — See [LICENSE](LICENSE) file for details.
 
 ## Roadmap
 
-- [ ] Fully offline / vendored build (bundle marked.js + DOMPurify, no CDN)
+- [x] Fully offline / vendored build (marked.js + DOMPurify bundled inline, no CDN)
 - [ ] Full-text search
 - [ ] Export to PDF
 - [ ] Print-friendly view
