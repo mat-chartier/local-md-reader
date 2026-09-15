@@ -3,7 +3,7 @@
 A lightweight, offline markdown explorer. Browse local markdown files with a split-pane interface, internal/cross-document anchors, and multiple tabs. **100% client-side, no server needed.**
 
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
-![Security: Hardened](https://img.shields.io/badge/Security-Hardened%208.5%2F10-green.svg)
+![Security: Hardened](https://img.shields.io/badge/Security-Hardened-green.svg)
 ![Vanilla JS](https://img.shields.io/badge/Stack-Vanilla%20JS-blue.svg)
 
 ---
@@ -17,8 +17,8 @@ A lightweight, offline markdown explorer. Browse local markdown files with a spl
 - 📏 **Resizable Panes** — Drag the splitter to adjust explorer/viewer width
 - 🌙 **Dark Mode** — Auto-adapts to system theme
 - 🇫🇷 **Unicode-Friendly** — Handles accents and special characters in anchor links
-- ⚡ **Instant** — Zero dependencies (except marked.js for rendering), runs offline
-- 🔒 **Security-Hardened** — XSS protection, CSP, sanitization, file validation
+- ⚡ **Lightweight** — Just two small libraries (marked.js + DOMPurify), no build step, no server
+- 🔒 **Security-Hardened** — XSS protection, CSP, sanitization, file validation, SRI
 
 ---
 
@@ -93,9 +93,9 @@ my-docs/
 🔒 **File Validation** — Extension & size checks (max 10MB)  
 🔒 **Link Validation** — Dangerous protocols blocked  
 🔒 **Debug Isolation** — No sensitive data in console  
-🔒 **Subresource Integrity** — CDN resources verified (ready for SRI checksums)  
+🔒 **Subresource Integrity** — CDN scripts pinned with SHA-384 checksums (active)  
 
-**Security Score: 8.5/10** — Production-ready for professional/confidential use.
+> **Note on "offline":** document reading, parsing, and rendering all happen locally — no file content or telemetry ever leaves your device. The only network access is the **one-time load of `marked.js` and `DOMPurify` from CDN** (cached by the browser afterward). A fully self-contained, vendored build is on the roadmap.
 
 See [SECURITY.md](SECURITY.md) for detailed threat model, attack scenarios, and deployment guidelines.
 
@@ -123,16 +123,19 @@ npx http-server .
 
 ---
 
-## Advanced: Add SRI Checksums
+## Advanced: SRI Checksums
 
-For maximum security against CDN compromise, add Subresource Integrity checksums:
+Subresource Integrity is **already active** — both CDN scripts in `index.html` are pinned
+with SHA-384 `integrity` attributes, so the browser rejects any tampered CDN response.
+
+You only need to regenerate the checksums if you **bump a library version**:
 
 ### 1. Generate Checksums
 ```bash
 python3 generate_sri_checksums.py
 ```
 
-### 2. Copy to index.html
+### 2. Update the `integrity="sha384-..."` attributes in index.html
 ```html
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/13.0.1/marked.min.js"
         integrity="sha384-YOUR_CHECKSUM_HERE"
@@ -140,13 +143,11 @@ python3 generate_sri_checksums.py
         referrerpolicy="no-referrer"></script>
 ```
 
-This verifies that CDN content hasn't been tampered with.
-
 ---
 
 ## Technical Stack
 
-- **Vanilla JavaScript** (~1500 lines, no build tools)
+- **Vanilla JavaScript** (single ~1150-line `index.html`, no build tools)
 - **Marked.js** (CDN) for markdown rendering
 - **DOMPurify** (CDN) for XSS prevention
 - **File API** for local file access (no backend)
@@ -200,7 +201,7 @@ Navigate API documentation, changelogs, guides.
 
 | Metric | Value |
 |--------|-------|
-| Initial Load | <100ms (no network) |
+| Initial Load | <100ms (after CDN scripts are cached) |
 | File Open | <50ms (from cache) |
 | Render | <200ms (marked + DOMPurify) |
 | Memory (10 files) | ~5MB |
@@ -211,7 +212,7 @@ Navigate API documentation, changelogs, guides.
 ## Troubleshooting
 
 ### Issue: Scripts don't load
-**Solution:** Check internet connection (CDN access needed). Offline fallback coming soon.
+**Solution:** The first load needs internet access to fetch `marked.js` and `DOMPurify` from CDN (cached by the browser afterward). If a CDN response is tampered with, the SRI check will block it — re-download a clean `index.html`. A fully vendored, network-free build is on the roadmap.
 
 ### Issue: Markdown doesn't render
 **Check DevTools Console (F12)** for CSP violations or script errors.
@@ -269,6 +270,7 @@ MIT License — See [LICENSE](LICENSE) file for details.
 
 ## Roadmap
 
+- [ ] Fully offline / vendored build (bundle marked.js + DOMPurify, no CDN)
 - [ ] Full-text search
 - [ ] Export to PDF
 - [ ] Print-friendly view

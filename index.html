@@ -14,10 +14,12 @@
   <title>Local Markdown Reader - Secure Edition</title>
   <!-- Marked.js -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/13.0.1/marked.min.js"
+          integrity="sha384-rsHQN9cWjVomCl6G/DKSg/7NAxlGLQ18RgAK8nNytMFlpz+JMgE8PDSpJrjgGDOU"
           crossorigin="anonymous"
           referrerpolicy="no-referrer"></script>
   <!-- DOMPurify -->
   <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.9/dist/purify.min.js"
+          integrity="sha384-3HPB1XT51W3gGRxAmZ+qbZwRpRlFQL632y8x+adAqCr4Wp3TaWwCLSTAJJKbyWEK"
           crossorigin="anonymous"
           referrerpolicy="no-referrer"></script>
   <style>
@@ -932,14 +934,19 @@
     }
 
     function handleLinkClick(e, currentDocPath) {
-      const href = e.target.getAttribute('href');
-      
+      // Use currentTarget (the <a> the listener is bound to), not target,
+      // which may be a child element (e.g. <a><code>x</code></a>).
+      const href = e.currentTarget.getAttribute('href');
+      if (!href) return;
+
       // ====================================================================
       // SECURITY: ONLY ALLOW SAME-ORIGIN & FRAGMENT LINKS
       // Block external URLs and javascript: protocols
       // ====================================================================
       if (href.startsWith('http://') || href.startsWith('https://')) {
-        // External links are allowed but will open in new tab
+        // External links open in a new tab, isolated from this document.
+        e.preventDefault();
+        window.open(href, '_blank', 'noopener,noreferrer');
         return;
       }
 
