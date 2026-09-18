@@ -58,6 +58,25 @@ above.
 
 ---
 
+## Mermaid
+
+- **Version:** 11.17.2
+- **License:** MIT
+- **Copyright:** © Knut Sveidqvist and Mermaid contributors
+- **Homepage:** https://github.com/mermaid-js/mermaid
+- **Full license:** https://github.com/mermaid-js/mermaid/blob/master/LICENSE
+- **SHA-384 (of the exact bundled bytes):**
+  `sha384-EOXBFmc3gx5mb+vn0vPvvGqACToJD24hhacX5Yx+8NUUQrHIle/Qi5Bg9o3zKwW2`
+
+Renders ` ```mermaid ` fenced code blocks (flowchart, sequence, class, state, ER,
+gantt, pie, gitgraph…) to SVG **entirely client-side** — no network requests, in
+keeping with the app's offline model. Initialized with `securityLevel: 'strict'`,
+and the produced SVG is re-sanitized with DOMPurify (`SVG_SANITIZE`) before it is
+inserted into the document. The upstream build ships without a license header
+comment, so an MIT header is prepended to the inline `<script>` block.
+
+---
+
 ## Updating a vendored library
 
 1. Download the exact minified build you want to pin, e.g.

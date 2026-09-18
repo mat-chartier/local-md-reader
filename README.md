@@ -13,13 +13,14 @@ A lightweight, offline document explorer. Browse local **markdown, HTML, and tex
 - 📁 **File Explorer** — Real folder tree: every sub-folder is shown (even ones with no `.md`) and read **lazily**, only when you expand it — no slow up-front scan (Chromium browsers; see note below)
 - 🔄 **Refresh** — Re-scan the current folder to pick up new/changed files without re-selecting it (Chromium browsers; see note below)
 - 📄 **Live Preview** — Renders markdown to HTML with proper formatting
+- 📊 **Mermaid diagrams** — ` ```mermaid ` code blocks (flowchart, sequence, class, state, ER, gantt, pie, gitgraph…) are rendered to SVG **entirely offline**, then re-sanitized before display
 - 📃 **Many file types** — Markdown, HTML, and plain-text/code files (`.txt`, `.json`, `.csv`, `.log`, `.xml`, `.yml`, `.js`, `.py`, `.css`, …). HTML renders sanitized with a **source ⇄ preview** toggle; other text files show as plain text
 - 🔗 **Smart Navigation** — Jump between documents with internal and cross-document anchors
 - 📑 **Multi-Tab Support** — Open multiple files at once, cached for performance
 - 📏 **Resizable Panes** — Drag the splitter to adjust explorer/viewer width
 - 🌙 **Dark Mode** — Auto-adapts to system theme
 - 🇫🇷 **Unicode-Friendly** — Handles accents and special characters in anchor links
-- ⚡ **Lightweight & self-contained** — marked.js + DOMPurify vendored inline in one HTML file; no build step, no server, no network
+- ⚡ **Self-contained** — marked.js + DOMPurify + Mermaid vendored inline in one HTML file; no build step, no server, no network
 - 🔒 **Security-Hardened** — XSS protection, strict CSP, sanitization, file validation, zero external requests
 
 ---
@@ -84,6 +85,7 @@ Click any `.md` file to view it rendered.
 ✅ Links  
 ✅ Bold, italic, strikethrough  
 ✅ Horizontal rules  
+✅ Mermaid diagrams (` ```mermaid ` → rendered SVG, offline)  
 
 ### Folder Structure
 
@@ -110,9 +112,9 @@ my-docs/
 🔒 **File Validation** — Extension & size checks (max 10MB)  
 🔒 **Link Validation** — Dangerous protocols blocked  
 🔒 **Debug Isolation** — No sensitive data in console  
-🔒 **Zero external requests** — `marked.js` and `DOMPurify` are **vendored inline** (no CDN), so the page makes **no network requests at all**  
+🔒 **Zero external requests** — `marked.js`, `DOMPurify`, and `Mermaid` are **vendored inline** (no CDN), so the page makes **no network requests at all**  
 
-> **Truly offline & private:** everything — reading, parsing, rendering, and both libraries — is contained in the single `index.html`. The page issues **zero outbound network requests**, on `file://` and on GitHub Pages alike. No file content, and no metadata (not even your IP to a CDN), ever leaves your device. Enforced by CSP (`default-src 'none'; connect-src 'none'; img-src 'self' data:`) plus DOMPurify sanitization. See [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) for the bundled libraries and their licenses.
+> **Truly offline & private:** everything — reading, parsing, rendering (including Mermaid diagrams), and the bundled libraries — is contained in the single `index.html`. The page issues **zero outbound network requests**, on `file://` and on GitHub Pages alike. No file content, and no metadata (not even your IP to a CDN), ever leaves your device. Enforced by CSP (`default-src 'none'; connect-src 'none'; img-src 'self' data:`) plus DOMPurify sanitization. See [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) for the bundled libraries and their licenses.
 
 See [SECURITY.md](SECURITY.md) for detailed threat model, attack scenarios, and deployment guidelines.
 
@@ -142,8 +144,8 @@ npx http-server .
 
 ## Advanced: Updating the Vendored Libraries
 
-`marked.js` and `DOMPurify` are **bundled inline** in `index.html` (no CDN, no
-Subresource Integrity needed since nothing is fetched at runtime). To bump a
+`marked.js`, `DOMPurify`, and `Mermaid` are **bundled inline** in `index.html` (no
+CDN, no Subresource Integrity needed since nothing is fetched at runtime). To bump a
 version, download the exact minified build, verify its SHA-384, and replace the
 matching inline `<script>` block — keeping its license header comment intact.
 Full step-by-step and the pinned checksums are in
@@ -156,6 +158,7 @@ Full step-by-step and the pinned checksums are in
 - **Vanilla JavaScript** (single self-contained `index.html`, no build tools)
 - **Marked.js** (vendored inline) for markdown rendering
 - **DOMPurify** (vendored inline) for XSS prevention
+- **Mermaid** (vendored inline) for offline diagram rendering
 - **File System Access API / File API** for local file access (no backend)
 - **CSS Grid & Flexbox** for responsive UI
 
